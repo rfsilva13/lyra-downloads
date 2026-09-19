@@ -10,7 +10,6 @@ concurrency:
   cancel-in-progress: false
 jobs:
   deploy:
-    if: github.event.repository.private == true
     runs-on: ubuntu-latest
     permissions:
       contents: read
