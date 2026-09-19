@@ -1,0 +1,81 @@
+name: Publish download site
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: pages
+  cancel-in-progress: false
+jobs:
+  deploy:
+    if: github.event.repository.private == true
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Prepare only public website files and verified archives
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import shutil, tarfile, zipfile
+          root = Path('.')
+          output = root / '_public'
+          output.mkdir()
+          installers = ['lyra-0.6.0-android-arm64.apk', 'lyra-0.6.0-linux-x64.tar.gz', 'lyra-0.6.0-windows-x64.zip']
+          for name in installers:
+              source = root / name
+              if source.is_symlink() or not source.is_file() or source.stat().st_size < 1024:
+                  raise SystemExit(f'Missing real installer; placeholder cannot be published: {name}')
+              if name.endswith('.tar.gz'):
+                  with tarfile.open(source, 'r:gz') as archive:
+                      if not archive.getmembers():
+                          raise SystemExit(f'Empty archive: {name}')
+              else:
+                  with zipfile.ZipFile(source) as archive:
+                      if not archive.namelist() or archive.testzip() is not None:
+                          raise SystemExit(f'Invalid archive: {name}')
+              shutil.copy2(source, output / name)
+          checksums = root / 'SHA256SUMS.txt'
+          if not checksums.is_file():
+              raise SystemExit('Missing SHA256SUMS.txt')
+          import hashlib
+          expected = {}
+          for line in checksums.read_text().splitlines():
+              digest, name = line.split('  ', 1)
+              expected[name] = digest
+          for name in installers:
+              actual = hashlib.sha256((root / name).read_bytes()).hexdigest()
+              if expected.get(name) != actual:
+                  raise SystemExit(f'Checksum mismatch: {name}')
+          shutil.copy2(checksums, output / checksums.name)
+          allowed = {'.html', '.css', '.js', '.ttf', '.woff', '.woff2', '.png', '.jpg', '.jpeg', '.svg', '.webp', '.ico'}
+          sources = [p for p in root.iterdir() if p.is_file()]
+          sources += list((root / 'assets').rglob('*'))
+          for source in sources:
+              if source.is_symlink():
+                  raise SystemExit(f'Symlinks are not permitted: {source}')
+              if source.is_file() and source.suffix.lower() in allowed:
+                  target = output / source
+                  target.parent.mkdir(parents=True, exist_ok=True)
+                  shutil.copy2(source, target)
+          if not (output / 'index.html').is_file():
+              raise SystemExit('Missing site entry point')
+          PY
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: _public
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4
