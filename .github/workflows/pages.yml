@@ -31,7 +31,7 @@ jobs:
           root = Path('.')
           output = root / '_public'
           output.mkdir()
-          installers = ['lyra-0.6.0-android-arm64.apk', 'lyra-0.6.0-linux-x64.tar.gz', 'lyra-0.6.0-windows-x64.zip']
+          installers = ['lyra-0.6.1-android-arm64.apk', 'lyra-0.6.1-linux-x64.tar.gz', 'lyra-0.6.1-windows-x64.zip']
           for name in installers:
               source = root / name
               if source.is_symlink() or not source.is_file() or source.stat().st_size < 1024:
@@ -58,7 +58,7 @@ jobs:
               if expected.get(name) != actual:
                   raise SystemExit(f'Checksum mismatch: {name}')
           shutil.copy2(checksums, output / checksums.name)
-          allowed = {'.html', '.css', '.js', '.ttf', '.woff', '.woff2', '.png', '.jpg', '.jpeg', '.svg', '.webp', '.ico'}
+          allowed = {'.html', '.css', '.js', '.json', '.ttf', '.woff', '.woff2', '.png', '.jpg', '.jpeg', '.svg', '.webp', '.ico'}
           sources = [p for p in root.iterdir() if p.is_file()]
           sources += list((root / 'assets').rglob('*'))
           for source in sources:
